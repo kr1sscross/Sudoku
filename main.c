@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <unistd.h>
 
 #define MAX_SIZE 16
 
@@ -17,15 +18,11 @@ void save_game(const char *filename);
 void load_game(const char *filename);
 
 void clear_screen() {
-#ifdef _WIN32
-    system("cls");
-#else
-    system("clear");
-#endif
+    printf("\033[H\033[J");
 }
 
-// main menu
 void show_menu() {
+    clear_screen();
     printf("=== Sudoku Game ===\n");
     printf("1. Create a new game\n");
     printf("2. Continue game\n");
@@ -35,6 +32,7 @@ void show_menu() {
 }
 
 void select_new_game() {
+    clear_screen();
     printf("Select board size:\n");
     printf("1. 4x4\n");
     printf("2. 9x9\n");
@@ -43,8 +41,8 @@ void select_new_game() {
     printf("Your choice: ");
 }
 
-// Create a new game - option 1.
 void select_difficulty() {
+    clear_screen();
     printf("Select difficulty:\n");
     printf("1. Easy\n");
     printf("2. Medium\n");
@@ -53,8 +51,8 @@ void select_difficulty() {
     printf("Your choice: ");
 }
 
-// Game options
 void game_option() {
+    clear_screen();
     printf("=== Game Options ===\n");
     printf("1. Save game\n");
     printf("2. Save and exit\n");
@@ -62,8 +60,8 @@ void game_option() {
     printf("Your choice: ");
 }
 
-// Instruction - option 3.
 void show_instruction() {
+    clear_screen();
     printf("=== How to Play Sudoku ===\n");
     printf("- Fill the empty cells with numbers.\n");
     printf("- Each number can appear only once per row, column, and block.\n");
@@ -209,12 +207,15 @@ int input_move() {
             case 2:
                 save_game("autosave.sav");
                 printf("Exiting to menu...\n");
+                sleep(1);
                 return 1;
             case 3:
                 printf("Exiting to menu...\n");
+                sleep(1);
                 return 1;
             default:
                 printf("Invalid option!\n");
+                sleep(1);
                 return 0;
         }
     }
@@ -225,11 +226,13 @@ int input_move() {
 
     if (row < 0 || row >= size || col < 0 || col >= size || num < 1 || num > size) {
         printf("Invalid input. Please try again.\n");
+        sleep(1);
         return 0;
     }
 
     if (board[row][col] != 0) {
         printf("Cell already filled. Choose an empty cell.\n");
+        sleep(1);
         return 0;
     }
 
@@ -242,6 +245,7 @@ int input_move() {
         printf("You lost a life! Remaining lives: %d\n", lives);
     }
 
+    sleep(1);
     return 0;
 }
 
@@ -257,6 +261,8 @@ int check_win() {
 
 void game_loop() {
     while (1) {
+        clear_screen();
+
         if (lives <= 0) {
             printf("\nYou ran out of lives! Game over.\n");
             end_time = time(NULL);
@@ -289,6 +295,7 @@ void save_game(const char *filename) {
     FILE *file = fopen(filename, "wb");
     if (!file) {
         printf("Error saving game!\n");
+        sleep(1);
         return;
     }
 
@@ -299,12 +306,14 @@ void save_game(const char *filename) {
 
     fclose(file);
     printf("Game saved successfully.\n");
+    sleep(1);
 }
 
 void load_game(const char *filename) {
     FILE *file = fopen(filename, "rb");
     if (!file) {
         printf("Error loading game! Creating a new game...\n");
+        sleep(1);
         return;
     }
 
@@ -315,6 +324,7 @@ void load_game(const char *filename) {
 
     fclose(file);
     printf("Game loaded successfully.\n");
+    sleep(1);
 }
 
 int main() {
@@ -322,7 +332,6 @@ int main() {
     int choice, difficulty;
 
     while (1) {
-        clear_screen();
         show_menu();
         scanf("%d", &choice);
 
@@ -336,6 +345,7 @@ int main() {
                 else if (choice == 3) size = 16;
                 else {
                     printf("Invalid size!\n");
+                    sleep(1);
                     break;
                 }
 
@@ -368,6 +378,7 @@ int main() {
 
             default:
                 printf("Invalid choice!\n");
+                sleep(1);
                 break;
         }
     }
