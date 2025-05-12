@@ -6,8 +6,10 @@
 #include <unistd.h>
 
 #define MAX_SIZE 16
+#define INF 999999
 
 int board[MAX_SIZE][MAX_SIZE];
+int original[MAX_SIZE][MAX_SIZE];
 int size;
 int box_size;
 int lives = 5;
@@ -27,6 +29,7 @@ void show_menu() {
     printf("1. Create a new game\n");
     printf("2. Continue game\n");
     printf("3. Instructions\n");
+    printf("4. Solve with Simulated Annealing\n");
     printf("0. Exit\n");
     printf("Your choice: ");
 }
@@ -327,6 +330,160 @@ void load_game(const char *filename) {
     sleep(1);
 }
 
+//SA solve code
+int calculate_cost(int grid[MAX_SIZE][MAX_SIZE]) {
+    int cost = 0;
+    for (int i = 0; i < size; i++) {
+        uint16_t row_mask[MAX_SIZE+1] = {0}, col_mask[MAX_SIZE+1] = {0};
+        for (int j = 0; j < size; j++) {
+            row_mask[grid[i][j]]++;
+            col_mask[grid[j][i]]++;
+        }
+        for (int k = 1; k <= size; k++) {
+            cost += (row_mask[k] > 1 ? row_mask[k] - 1 : 0);
+            cost += (col_mask[k] > 1 ? col_mask[k] - 1 : 0);
+        }
+    }
+    return cost;
+}
+
+void swap_random_in_block(int grid[MAX_SIZE][MAX_SIZE], int block_row, int block_col) {
+    int i1, j1, i2, j2;
+    do {
+        i1 = rand() % box_size;
+        j1 = rand() % box_size;
+        i2 = rand() % box_size;
+        j2 = rand() % box_size;
+    } while ((i1 == i2 && j1 == j2) || original[block_row*box_size+i1][block_col*box_size+j1] || original[block_row*box_size+i2][block_col*box_size+j2]);
+
+    int *a = &grid[block_row*box_size+i1][block_col*box_size+j1];
+    int *b = &grid[block_row*box_size+i2][block_col*box_size+j2];
+    int tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+void initialize_sa_grid(int grid[MAX_SIZE][MAX_SIZE]) {
+    memcpy(grid, board, sizeof(board));
+    memcpy(original, board, sizeof(board));
+
+    for (int block_row = 0; block_row < box_size; block_row++) {
+        for (int block_col = 0; block_col < box_size; block_col++) {
+            int present[MAX_SIZE+1] = {0};
+
+            for (int i = 0; i < box_size; i++) {
+                for (int j = 0; j < box_size; j++) {
+                    int val = grid[block_row*box_size+i][block_col*box_size+j];
+                    if (val > 0)
+                        present[val] = 1;
+                }
+            }
+
+            int to_place[MAX_SIZE], idx = 0;
+            for (int i = 1; i <= size; i++) {
+                if (!present[i]) to_place[idx++] = i;
+            }
+
+            for (int i = idx - 1; i > 0; i--) {
+                int j = rand() % (i + 1);
+                int temp = to_place[i];
+                to_place[i] = to_place[j];
+                to_place[j] = temp;
+            }
+
+            int k = 0;
+            for (int i = 0; i < box_size; i++) {
+                for (int j = 0; j < box_size; j++) {
+                    int row = block_row * box_size + i;
+                    int col = block_col * box_size + j;
+                    if (grid[row][col] == 0)
+                        grid[row][col] = to_place[k++];
+                }
+            }
+        }
+    }
+}
+
+void solve_with_sa() {
+    if (size != 9) {
+        printf("Simulated Annealing is implemented only for 9x9 Sudoku.\n");
+        return;
+    }
+
+    int grid[MAX_SIZE][MAX_SIZE];
+    initialize_sa_grid(grid);
+    memcpy(original, board, sizeof(board));
+
+    double T = 2.5;
+    double T_end = 1e-4;
+    double alpha = 0.999;
+    int max_iter = 300000;
+
+    int current_cost = calculate_cost(grid);
+    int best_cost = current_cost;
+    int best_grid[MAX_SIZE][MAX_SIZE];
+    memcpy(best_grid, grid, sizeof(grid));
+
+    clock_t start_time = clock();
+    int iter;
+    for (iter = 0; iter < max_iter && T > T_end && best_cost > 0; iter++) {
+        int block_row = rand() % box_size;
+        int block_col = rand() % box_size;
+
+        int i1, j1, i2, j2;
+        int retries = 10;
+        do {
+            i1 = rand() % box_size;
+            j1 = rand() % box_size;
+            i2 = rand() % box_size;
+            j2 = rand() % box_size;
+        } while ((i1 == i2 && j1 == j2 ||
+                 original[block_row*box_size+i1][block_col*box_size+j1] ||
+                 original[block_row*box_size+i2][block_col*box_size+j2]) && --retries > 0);
+
+        if (retries <= 0) continue;
+
+        int r1 = block_row * box_size + i1;
+        int c1 = block_col * box_size + j1;
+        int r2 = block_row * box_size + i2;
+        int c2 = block_col * box_size + j2;
+
+        int temp = grid[r1][c1];
+        grid[r1][c1] = grid[r2][c2];
+        grid[r2][c2] = temp;
+
+        int new_cost = calculate_cost(grid);
+        int delta = new_cost - current_cost;
+
+        if (delta < 0 || ((double)rand() / RAND_MAX) < exp(-delta / T)) {
+            current_cost = new_cost;
+            if (current_cost < best_cost) {
+                best_cost = current_cost;
+                memcpy(best_grid, grid, sizeof(grid));
+            }
+        } else {
+            grid[r2][c2] = grid[r1][c1];
+            grid[r1][c1] = temp;
+        }
+
+        T *= alpha;
+    }
+
+    clock_t end_time = clock();
+    double time_taken = (double)(end_time - start_time) / CLOCKS_PER_SEC;
+
+    memcpy(board, best_grid, sizeof(board));
+    print_board();
+    printf("Simulated Annealing finished.\n");
+    printf("Iterations: %d\n", iter);
+    printf("Time: %.3f seconds\n", time_taken);
+    printf("Final cost: %d\n", current_cost);
+    printf("Best cost: %d\n", best_cost);
+    printf("Press Enter to continue.\n");
+    getchar(); getchar();
+}
+
+
 int main() {
     srand(time(NULL));
     int choice, difficulty;
@@ -370,6 +527,10 @@ int main() {
 
             case 3:
                 show_instruction();
+                break;
+
+            case 4:
+                solve_with_sa();
                 break;
 
             case 0:
